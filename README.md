@@ -2,13 +2,16 @@
 
 YouTube 비디오를 다운로드할 수 있는 간편한 Python 프로그램입니다.
 
+**GUI 버전과 CLI 버전 모두 제공됩니다!**
+
 ## 주요 기능
 
 - YouTube 비디오 다운로드
 - 해상도 선택 기능 (144p ~ 8K)
 - 자막 다운로드 지원 (수동 자막 및 자동 생성 자막)
 - 다운로드 진행 상태 표시
-- 사용자 친화적인 CLI 인터페이스
+- **사용자 친화적인 Windows GUI 인터페이스** ⭐ (새로 추가!)
+- CLI 버전도 함께 제공
 
 ## 설치 방법
 
@@ -40,8 +43,48 @@ pip install yt-dlp colorama
 
 ## 사용 방법
 
-### 기본 사용
+### 방법 1: GUI 버전 (Windows 추천) ⭐
 
+#### Python이 설치된 경우:
+
+**Windows:**
+```bash
+run_gui.bat
+```
+
+또는:
+```bash
+python youtube_downloader_gui.py
+```
+
+**Linux/Mac:**
+```bash
+python3 youtube_downloader_gui.py
+```
+
+#### Windows 실행 파일 (.exe) 만들기:
+
+Python이 설치되어 있지 않은 다른 컴퓨터에서 사용하려면 실행 파일을 만들 수 있습니다:
+
+```bash
+build_exe.bat
+```
+
+실행 파일은 `dist\YouTube다운로더.exe`에 생성됩니다.
+
+### 방법 2: CLI 버전 (명령줄)
+
+**Windows:**
+```bash
+run_cli.bat
+```
+
+또는:
+```bash
+python youtube_downloader.py
+```
+
+**Linux/Mac:**
 ```bash
 python3 youtube_downloader.py
 ```
@@ -55,7 +98,27 @@ python3 youtube_downloader.py
 5. 자막 다운로드 여부 선택
 6. 다운로드 시작
 
-### 사용 예시
+### GUI 버전 사용법
+
+1. **프로그램 실행**
+   - `run_gui.bat`을 더블 클릭하거나 `python youtube_downloader_gui.py` 실행
+
+2. **URL 입력**
+   - YouTube URL을 입력하고 "정보 가져오기" 버튼 클릭
+
+3. **비디오 정보 확인**
+   - 제목, 채널, 길이, 조회수, 사용 가능한 자막 확인
+
+4. **다운로드 설정**
+   - 저장 위치 선택 (기본: 내 문서/Downloads/YouTube)
+   - 해상도 선택 (드롭다운 메뉴)
+   - 자막 다운로드 옵션 설정
+
+5. **다운로드 시작**
+   - "다운로드 시작" 버튼 클릭
+   - 진행 상태 바에서 실시간 진행 상황 확인
+
+### CLI 버전 사용 예시
 
 ```
 YouTube URL을 입력하세요: https://www.youtube.com/watch?v=example
@@ -94,7 +157,8 @@ YouTube URL을 입력하세요: https://www.youtube.com/watch?v=example
 
 ## 다운로드 위치
 
-기본적으로 비디오는 `downloads/` 폴더에 저장됩니다.
+- **GUI 버전**: 기본적으로 `내 문서/Downloads/YouTube` 폴더 (변경 가능)
+- **CLI 버전**: 프로그램이 있는 폴더의 `downloads/` 하위 폴더
 
 ## 자막 다운로드
 
@@ -140,6 +204,20 @@ brew install ffmpeg
 - 인터넷 연결 확인
 - YouTube URL이 올바른지 확인
 - 비디오가 비공개 또는 삭제되지 않았는지 확인
+
+## 파일 구조
+
+```
+YouTubedownload/
+├── youtube_downloader_gui.py    # GUI 버전 (Windows용)
+├── youtube_downloader.py         # CLI 버전 (명령줄)
+├── requirements.txt              # 필요한 패키지 목록
+├── run_gui.bat                   # GUI 실행 스크립트 (Windows)
+├── run_cli.bat                   # CLI 실행 스크립트 (Windows)
+├── build_exe.bat                 # 실행 파일 빌드 스크립트
+├── README.md                     # 사용 설명서
+└── .gitignore                    # Git 제외 파일 목록
+```
 
 ## 라이선스
 
