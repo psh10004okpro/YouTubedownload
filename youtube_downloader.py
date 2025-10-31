@@ -129,6 +129,22 @@ class YouTubeDownloader:
 
         return all_subtitles
 
+    def check_ffmpeg(self):
+        """
+        ffmpeg 설치 확인
+
+        Returns:
+            bool: ffmpeg가 설치되어 있으면 True
+        """
+        try:
+            import subprocess
+            result = subprocess.run(['ffmpeg', '-version'],
+                                  capture_output=True,
+                                  timeout=5)
+            return result.returncode == 0
+        except:
+            return False
+
     def download_video(self, url, format_id=None, download_subtitles=False, subtitle_langs=None):
         """
         비디오 다운로드
@@ -144,12 +160,23 @@ class YouTubeDownloader:
             'progress_hooks': [self.progress_hook],
         }
 
-        if format_id:
-            # 선택한 포맷 + 최고 품질 오디오
-            ydl_opts['format'] = f'{format_id}+bestaudio/best'
+        # ffmpeg 확인
+        has_ffmpeg = self.check_ffmpeg()
+
+        if not has_ffmpeg:
+            print(f"\n{Fore.YELLOW}⚠️  경고: ffmpeg가 설치되어 있지 않습니다.")
+            print(f"{Fore.YELLOW}📦 단일 파일 포맷으로 다운로드합니다. (화질이 제한될 수 있습니다)")
+            print(f"{Fore.CYAN}💡 최고 화질을 원하시면 ffmpeg를 설치하세요. (README.md 참고)")
+            # ffmpeg 없이 다운로드 가능한 최고 품질 단일 파일 선택
+            ydl_opts['format'] = 'best[ext=mp4]/best'
         else:
-            # 최고 화질
-            ydl_opts['format'] = 'bestvideo+bestaudio/best'
+            # ffmpeg 있으면 최고 화질 비디오+오디오 병합
+            if format_id:
+                # 선택한 포맷 + 최고 품질 오디오
+                ydl_opts['format'] = f'{format_id}+bestaudio/best'
+            else:
+                # 최고 화질
+                ydl_opts['format'] = 'bestvideo+bestaudio/best'
 
         # 자막 다운로드 설정
         if download_subtitles:
@@ -167,8 +194,18 @@ class YouTubeDownloader:
                 ydl.download([url])
                 print(f"\n{Fore.GREEN}다운로드 완료!")
                 print(f"{Fore.CYAN}저장 위치: {self.download_path.absolute()}")
+
+                if not has_ffmpeg:
+                    print(f"\n{Fore.YELLOW}💡 팁: ffmpeg를 설치하면 더 높은 화질로 다운로드할 수 있습니다.")
         except Exception as e:
-            print(f"\n{Fore.RED}다운로드 오류: {str(e)}")
+            error_msg = str(e)
+            print(f"\n{Fore.RED}다운로드 오류: {error_msg}")
+
+            # ffmpeg 관련 오류 안내
+            if 'ffmpeg' in error_msg.lower():
+                print(f"\n{Fore.YELLOW}해결 방법:")
+                print(f"{Fore.CYAN}Windows: https://github.com/BtbN/FFmpeg-Builds/releases")
+                print(f"{Fore.CYAN}자세한 내용은 README.md를 참고하세요.")
 
     def progress_hook(self, d):
         """

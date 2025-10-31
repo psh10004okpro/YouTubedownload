@@ -235,9 +235,32 @@ ko, en, ja
 
 이 문제는 수정되었습니다. 최신 버전의 배치 파일을 사용하세요.
 
-### ffmpeg 관련 오류
+### ffmpeg 없이도 다운로드 가능! ✅
 
-일부 포맷을 병합하려면 ffmpeg가 필요합니다:
+**좋은 소식:** 이제 ffmpeg 없이도 다운로드할 수 있습니다!
+- 프로그램이 자동으로 단일 파일 포맷으로 다운로드합니다
+- 대부분의 경우 충분히 좋은 화질을 제공합니다
+
+**더 높은 화질을 원한다면:** ffmpeg를 설치하세요
+
+#### Windows에서 ffmpeg 설치 (추천)
+
+##### 방법 1: 자동 설치 도우미 (가장 쉬움)
+```bash
+install_ffmpeg.bat
+```
+스크립트가 다운로드 페이지를 열어줍니다.
+
+##### 방법 2: 수동 설치
+1. **다운로드**: https://github.com/BtbN/FFmpeg-Builds/releases
+2. **파일 선택**: `ffmpeg-master-latest-win64-gpl.zip` 다운로드
+3. **압축 해제**: ZIP 파일 압축 해제
+4. **복사**: `bin` 폴더에서 `ffmpeg.exe` 찾기
+5. **설치**: 다음 중 한 곳에 복사
+   - `C:\Windows\System32` (관리자 권한 필요)
+   - 또는 프로그램이 있는 폴더에 복사
+
+#### Linux/Mac에서 ffmpeg 설치
 
 **Ubuntu/Debian:**
 ```bash
@@ -249,8 +272,13 @@ sudo apt-get install ffmpeg
 brew install ffmpeg
 ```
 
-**Windows:**
-[ffmpeg 다운로드 페이지](https://ffmpeg.org/download.html)에서 다운로드
+#### ffmpeg 설치 확인
+
+```bash
+ffmpeg -version
+```
+
+성공적으로 설치되었으면 버전 정보가 표시됩니다.
 
 ### 다운로드 실패
 
@@ -266,6 +294,7 @@ YouTubedownload/
 ├── youtube_downloader.py         # CLI 버전 (명령줄)
 ├── requirements.txt              # 필요한 패키지 목록
 ├── install.bat                   # ⭐ 설치 스크립트 (처음 한 번 실행)
+├── install_ffmpeg.bat            # 🎬 ffmpeg 설치 도우미 (선택 사항)
 ├── run_gui.bat                   # GUI 실행 스크립트 (Windows)
 ├── run_cli.bat                   # CLI 실행 스크립트 (Windows)
 ├── build_exe.bat                 # 실행 파일 빌드 스크립트

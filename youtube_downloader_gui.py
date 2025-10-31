@@ -619,6 +619,17 @@ class YouTubeDownloaderGUI:
         thread.daemon = True
         thread.start()
 
+    def check_ffmpeg(self):
+        """ffmpeg 설치 확인"""
+        try:
+            import subprocess
+            result = subprocess.run(['ffmpeg', '-version'],
+                                  capture_output=True,
+                                  timeout=5)
+            return result.returncode == 0
+        except:
+            return False
+
     def _download_thread(self, url, format_id, download_subs, subtitle_langs):
         """다운로드 (스레드)"""
         try:
@@ -627,10 +638,20 @@ class YouTubeDownloaderGUI:
                 'progress_hooks': [self.progress_hook],
             }
 
-            if format_id:
-                ydl_opts['format'] = f'{format_id}+bestaudio/best'
+            # ffmpeg 확인
+            has_ffmpeg = self.check_ffmpeg()
+
+            if not has_ffmpeg:
+                self.root.after(0, self.log, "⚠️  ffmpeg가 설치되어 있지 않습니다.")
+                self.root.after(0, self.log, "📦 단일 파일 포맷으로 다운로드합니다. (화질이 제한될 수 있습니다)")
+                # ffmpeg 없이 다운로드 가능한 최고 품질 단일 파일 선택
+                ydl_opts['format'] = 'best[ext=mp4]/best'
             else:
-                ydl_opts['format'] = 'bestvideo+bestaudio/best'
+                # ffmpeg 있으면 최고 화질 비디오+오디오 병합
+                if format_id:
+                    ydl_opts['format'] = f'{format_id}+bestaudio/best'
+                else:
+                    ydl_opts['format'] = 'bestvideo+bestaudio/best'
 
             if download_subs:
                 ydl_opts['writesubtitles'] = True
@@ -646,14 +667,32 @@ class YouTubeDownloaderGUI:
 
             self.root.after(0, self.log, "🎉 다운로드 완료!")
             self.root.after(0, lambda: self.status_label.config(text="🎉 다운로드 완료!"))
-            self.root.after(0, messagebox.showinfo, "완료",
-                          f"다운로드가 완료되었습니다!\n\n저장 위치:\n{self.download_path.get()}")
+
+            # ffmpeg 없으면 설치 안내 추가
+            if not has_ffmpeg:
+                self.root.after(0, messagebox.showinfo, "완료",
+                              f"다운로드가 완료되었습니다!\n\n저장 위치:\n{self.download_path.get()}\n\n"
+                              f"💡 팁: ffmpeg를 설치하면 더 높은 화질로 다운로드할 수 있습니다.\n"
+                              f"자세한 내용은 README.md를 참고하세요.")
+            else:
+                self.root.after(0, messagebox.showinfo, "완료",
+                              f"다운로드가 완료되었습니다!\n\n저장 위치:\n{self.download_path.get()}")
 
         except Exception as e:
             error_msg = f"❌ 다운로드 오류: {str(e)}"
             self.root.after(0, self.log, error_msg)
             self.root.after(0, lambda: self.status_label.config(text="❌ 다운로드 실패"))
-            self.root.after(0, messagebox.showerror, "오류", error_msg)
+
+            # ffmpeg 관련 오류인지 확인
+            if 'ffmpeg' in str(e).lower():
+                self.root.after(0, messagebox.showerror, "오류",
+                              f"ffmpeg가 필요합니다!\n\n"
+                              f"해결 방법:\n"
+                              f"1. Windows: https://github.com/BtbN/FFmpeg-Builds/releases 에서 다운로드\n"
+                              f"2. 압축 해제 후 ffmpeg.exe를 시스템 PATH에 추가\n"
+                              f"3. 또는 README.md의 설치 가이드를 참고하세요")
+            else:
+                self.root.after(0, messagebox.showerror, "오류", error_msg)
 
         finally:
             self.is_downloading = False
