@@ -1,24 +1,43 @@
 #!/usr/bin/env python3
 """
-YouTube 다운로더 - GUI 버전
-Windows용 그래픽 인터페이스
+YouTube 다운로더 - 개선된 GUI 버전
+Windows용 사용자 친화적 그래픽 인터페이스
 """
 
 import os
 import sys
 import threading
+import io
+import urllib.request
 from pathlib import Path
 from tkinter import *
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import yt_dlp
 
+try:
+    from PIL import Image, ImageTk
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 
 class YouTubeDownloaderGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("YouTube 다운로더")
-        self.root.geometry("800x700")
+        self.root.title("YouTube 다운로더 v2.0")
+        self.root.geometry("900x750")
         self.root.resizable(True, True)
+
+        # 색상 테마
+        self.colors = {
+            'primary': '#FF0000',      # YouTube 빨강
+            'secondary': '#282828',    # 어두운 회색
+            'bg': '#FFFFFF',           # 흰색 배경
+            'text': '#030303',         # 거의 검정
+            'success': '#065F46',      # 녹색
+            'warning': '#DC2626',      # 빨강
+            'info': '#1E40AF',         # 파랑
+        }
 
         # 변수 초기화
         self.download_path = StringVar(value=str(Path.home() / "Downloads" / "YouTube"))
@@ -29,126 +48,369 @@ class YouTubeDownloaderGUI:
         self.video_info = None
         self.formats = []
         self.is_downloading = False
+        self.thumbnail_image = None
 
+        # UI 설정
+        self.setup_styles()
         self.setup_ui()
 
-    def setup_ui(self):
-        """UI 구성"""
-        # 스타일 설정
+        # 클립보드 모니터링 시작
+        self.check_clipboard()
+
+    def setup_styles(self):
+        """스타일 설정"""
         style = ttk.Style()
         style.theme_use('clam')
 
-        # 메인 프레임
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(W, E, N, S))
+        # 버튼 스타일
+        style.configure('Primary.TButton',
+                       background=self.colors['primary'],
+                       foreground='white',
+                       borderwidth=0,
+                       focuscolor='none',
+                       font=('맑은 고딕', 10, 'bold'))
 
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
+        style.configure('Secondary.TButton',
+                       background='#F3F4F6',
+                       foreground=self.colors['text'],
+                       borderwidth=1,
+                       font=('맑은 고딕', 9))
 
-        # 제목
-        title_label = Label(main_frame, text="YouTube 다운로더",
-                          font=("맑은 고딕", 16, "bold"), fg="#1a73e8")
-        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
+    def setup_ui(self):
+        """UI 구성"""
+        # 메인 컨테이너
+        main_container = Frame(self.root, bg=self.colors['bg'])
+        main_container.pack(fill=BOTH, expand=True, padx=20, pady=20)
 
-        # URL 입력
-        row = 1
-        ttk.Label(main_frame, text="YouTube URL:", font=("맑은 고딕", 10)).grid(
-            row=row, column=0, sticky=W, pady=5)
-        url_entry = ttk.Entry(main_frame, textvariable=self.url_var, width=50)
-        url_entry.grid(row=row, column=1, sticky=(W, E), pady=5, padx=5)
-        ttk.Button(main_frame, text="정보 가져오기",
-                  command=self.fetch_video_info).grid(row=row, column=2, pady=5)
+        # 제목 영역
+        self.create_header(main_container)
 
-        # 비디오 정보 표시 영역
-        row += 1
-        info_frame = ttk.LabelFrame(main_frame, text="비디오 정보", padding="10")
-        info_frame.grid(row=row, column=0, columnspan=3, sticky=(W, E), pady=10)
-        info_frame.columnconfigure(0, weight=1)
+        # URL 입력 영역
+        self.create_url_section(main_container)
 
-        self.info_text = scrolledtext.ScrolledText(info_frame, height=6, width=70,
-                                                   font=("맑은 고딕", 9), state='disabled')
-        self.info_text.grid(row=0, column=0, sticky=(W, E))
+        # 비디오 정보 및 썸네일 영역
+        self.create_info_section(main_container)
 
-        # 저장 위치
-        row += 1
-        ttk.Label(main_frame, text="저장 위치:", font=("맑은 고딕", 10)).grid(
-            row=row, column=0, sticky=W, pady=5)
-        ttk.Entry(main_frame, textvariable=self.download_path, width=50).grid(
-            row=row, column=1, sticky=(W, E), pady=5, padx=5)
-        ttk.Button(main_frame, text="찾아보기",
-                  command=self.browse_folder).grid(row=row, column=2, pady=5)
+        # 다운로드 설정 영역
+        self.create_settings_section(main_container)
 
-        # 해상도 선택
-        row += 1
-        ttk.Label(main_frame, text="해상도:", font=("맑은 고딕", 10)).grid(
-            row=row, column=0, sticky=W, pady=5)
-        self.resolution_combo = ttk.Combobox(main_frame, textvariable=self.resolution_var,
-                                            state='readonly', width=47)
-        self.resolution_combo['values'] = ("최고 화질",)
-        self.resolution_combo.grid(row=row, column=1, sticky=(W, E), pady=5, padx=5)
-
-        # 자막 다운로드 옵션
-        row += 1
-        subtitle_frame = ttk.LabelFrame(main_frame, text="자막 설정", padding="10")
-        subtitle_frame.grid(row=row, column=0, columnspan=3, sticky=(W, E), pady=10)
-
-        ttk.Checkbutton(subtitle_frame, text="자막 다운로드",
-                       variable=self.download_subtitles_var,
-                       command=self.toggle_subtitle_options).grid(row=0, column=0, sticky=W)
-
-        ttk.Label(subtitle_frame, text="언어 (쉼표로 구분):").grid(
-            row=1, column=0, sticky=W, pady=5)
-        self.subtitle_entry = ttk.Entry(subtitle_frame, textvariable=self.subtitle_langs_var,
-                                       width=30, state='disabled')
-        self.subtitle_entry.grid(row=1, column=1, sticky=W, pady=5, padx=5)
-
-        ttk.Label(subtitle_frame, text="예: ko,en,ja",
-                 font=("맑은 고딕", 8), foreground="gray").grid(
-            row=2, column=1, sticky=W)
-
-        # 진행 상태
-        row += 1
-        progress_frame = ttk.LabelFrame(main_frame, text="다운로드 진행 상태", padding="10")
-        progress_frame.grid(row=row, column=0, columnspan=3, sticky=(W, E), pady=10)
-        progress_frame.columnconfigure(0, weight=1)
-
-        self.progress_var = DoubleVar()
-        self.progress_bar = ttk.Progressbar(progress_frame, variable=self.progress_var,
-                                           maximum=100, length=600)
-        self.progress_bar.grid(row=0, column=0, sticky=(W, E), pady=5)
-
-        self.status_label = Label(progress_frame, text="대기 중...",
-                                 font=("맑은 고딕", 9), anchor=W)
-        self.status_label.grid(row=1, column=0, sticky=(W, E))
+        # 진행 상태 영역
+        self.create_progress_section(main_container)
 
         # 로그 영역
-        row += 1
-        log_frame = ttk.LabelFrame(main_frame, text="로그", padding="10")
-        log_frame.grid(row=row, column=0, columnspan=3, sticky=(W, E, N, S), pady=10)
-        log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(0, weight=1)
-        main_frame.rowconfigure(row, weight=1)
+        self.create_log_section(main_container)
 
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=8, width=70,
-                                                 font=("맑은 고딕", 9), state='disabled')
-        self.log_text.grid(row=0, column=0, sticky=(W, E, N, S))
-
-        # 다운로드 버튼
-        row += 1
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=row, column=0, columnspan=3, pady=10)
-
-        self.download_button = ttk.Button(button_frame, text="다운로드 시작",
-                                         command=self.start_download)
-        self.download_button.grid(row=0, column=0, padx=5)
-
-        ttk.Button(button_frame, text="로그 지우기",
-                  command=self.clear_log).grid(row=0, column=1, padx=5)
+        # 액션 버튼 영역
+        self.create_action_buttons(main_container)
 
         # 초기 로그
-        self.log("YouTube 다운로더가 시작되었습니다.")
-        self.log("YouTube URL을 입력하고 '정보 가져오기'를 클릭하세요.")
+        self.log("✨ YouTube 다운로더가 시작되었습니다!")
+        self.log("📝 YouTube URL을 입력하고 '정보 가져오기'를 클릭하세요.")
+
+    def create_header(self, parent):
+        """헤더 생성"""
+        header_frame = Frame(parent, bg=self.colors['bg'])
+        header_frame.pack(fill=X, pady=(0, 20))
+
+        title = Label(header_frame,
+                     text="📺 YouTube 다운로더",
+                     font=('맑은 고딕', 24, 'bold'),
+                     fg=self.colors['primary'],
+                     bg=self.colors['bg'])
+        title.pack()
+
+        subtitle = Label(header_frame,
+                        text="유튜브 영상을 쉽고 빠르게 다운로드하세요",
+                        font=('맑은 고딕', 10),
+                        fg='#6B7280',
+                        bg=self.colors['bg'])
+        subtitle.pack()
+
+    def create_url_section(self, parent):
+        """URL 입력 섹션"""
+        url_frame = LabelFrame(parent, text="  📌 YouTube URL  ",
+                              font=('맑은 고딕', 11, 'bold'),
+                              bg=self.colors['bg'],
+                              fg=self.colors['text'],
+                              padx=15, pady=15)
+        url_frame.pack(fill=X, pady=(0, 15))
+
+        # URL 입력 필드
+        input_frame = Frame(url_frame, bg=self.colors['bg'])
+        input_frame.pack(fill=X)
+
+        url_entry = Entry(input_frame,
+                         textvariable=self.url_var,
+                         font=('맑은 고딕', 11),
+                         relief=SOLID,
+                         borderwidth=1)
+        url_entry.pack(side=LEFT, fill=X, expand=True, ipady=8, padx=(0, 10))
+
+        # 붙여넣기 버튼
+        paste_btn = Button(input_frame,
+                          text="📋 붙여넣기",
+                          command=self.paste_from_clipboard,
+                          font=('맑은 고딕', 9),
+                          bg='#F3F4F6',
+                          relief=FLAT,
+                          cursor='hand2',
+                          padx=15, pady=8)
+        paste_btn.pack(side=LEFT, padx=(0, 5))
+
+        # 정보 가져오기 버튼
+        fetch_btn = Button(input_frame,
+                          text="🔍 정보 가져오기",
+                          command=self.fetch_video_info,
+                          font=('맑은 고딕', 9, 'bold'),
+                          bg=self.colors['primary'],
+                          fg='white',
+                          relief=FLAT,
+                          cursor='hand2',
+                          padx=15, pady=8)
+        fetch_btn.pack(side=LEFT)
+
+    def create_info_section(self, parent):
+        """비디오 정보 섹션"""
+        info_frame = LabelFrame(parent, text="  ℹ️  비디오 정보  ",
+                               font=('맑은 고딕', 11, 'bold'),
+                               bg=self.colors['bg'],
+                               fg=self.colors['text'],
+                               padx=15, pady=15)
+        info_frame.pack(fill=BOTH, expand=True, pady=(0, 15))
+
+        # 썸네일과 정보를 담을 컨테이너
+        content_frame = Frame(info_frame, bg=self.colors['bg'])
+        content_frame.pack(fill=BOTH, expand=True)
+
+        # 썸네일 영역 (왼쪽)
+        self.thumbnail_label = Label(content_frame,
+                                    text="🎬\n\n썸네일이 여기에\n표시됩니다",
+                                    font=('맑은 고딕', 10),
+                                    bg='#F3F4F6',
+                                    fg='#9CA3AF',
+                                    width=30,
+                                    height=10,
+                                    relief=SOLID,
+                                    borderwidth=1)
+        self.thumbnail_label.pack(side=LEFT, padx=(0, 15))
+
+        # 정보 텍스트 영역 (오른쪽)
+        self.info_text = scrolledtext.ScrolledText(content_frame,
+                                                   height=10,
+                                                   font=('맑은 고딕', 10),
+                                                   relief=SOLID,
+                                                   borderwidth=1,
+                                                   state='disabled')
+        self.info_text.pack(side=LEFT, fill=BOTH, expand=True)
+
+    def create_settings_section(self, parent):
+        """다운로드 설정 섹션"""
+        settings_frame = LabelFrame(parent, text="  ⚙️  다운로드 설정  ",
+                                   font=('맑은 고딕', 11, 'bold'),
+                                   bg=self.colors['bg'],
+                                   fg=self.colors['text'],
+                                   padx=15, pady=15)
+        settings_frame.pack(fill=X, pady=(0, 15))
+
+        # 저장 위치
+        path_frame = Frame(settings_frame, bg=self.colors['bg'])
+        path_frame.pack(fill=X, pady=(0, 10))
+
+        Label(path_frame, text="💾 저장 위치:",
+              font=('맑은 고딕', 10, 'bold'),
+              bg=self.colors['bg']).pack(side=LEFT, padx=(0, 10))
+
+        path_entry = Entry(path_frame,
+                          textvariable=self.download_path,
+                          font=('맑은 고딕', 9),
+                          relief=SOLID,
+                          borderwidth=1)
+        path_entry.pack(side=LEFT, fill=X, expand=True, ipady=5, padx=(0, 10))
+
+        Button(path_frame, text="📁 찾아보기",
+              command=self.browse_folder,
+              font=('맑은 고딕', 9),
+              bg='#F3F4F6',
+              relief=FLAT,
+              cursor='hand2',
+              padx=10, pady=5).pack(side=LEFT, padx=(0, 5))
+
+        Button(path_frame, text="📂 폴더 열기",
+              command=self.open_download_folder,
+              font=('맑은 고딕', 9),
+              bg='#F3F4F6',
+              relief=FLAT,
+              cursor='hand2',
+              padx=10, pady=5).pack(side=LEFT)
+
+        # 해상도 선택
+        resolution_frame = Frame(settings_frame, bg=self.colors['bg'])
+        resolution_frame.pack(fill=X, pady=(0, 10))
+
+        Label(resolution_frame, text="🎥 해상도:",
+              font=('맑은 고딕', 10, 'bold'),
+              bg=self.colors['bg']).pack(side=LEFT, padx=(0, 10))
+
+        self.resolution_combo = ttk.Combobox(resolution_frame,
+                                            textvariable=self.resolution_var,
+                                            state='readonly',
+                                            font=('맑은 고딕', 10),
+                                            width=40)
+        self.resolution_combo['values'] = ("최고 화질",)
+        self.resolution_combo.pack(side=LEFT, ipady=3)
+
+        # 자막 설정
+        subtitle_frame = Frame(settings_frame, bg=self.colors['bg'])
+        subtitle_frame.pack(fill=X)
+
+        Checkbutton(subtitle_frame,
+                   text="📝 자막 다운로드",
+                   variable=self.download_subtitles_var,
+                   command=self.toggle_subtitle_options,
+                   font=('맑은 고딕', 10, 'bold'),
+                   bg=self.colors['bg'],
+                   activebackground=self.colors['bg']).pack(side=LEFT, padx=(0, 10))
+
+        Label(subtitle_frame, text="언어:",
+              font=('맑은 고딕', 9),
+              bg=self.colors['bg']).pack(side=LEFT, padx=(0, 5))
+
+        self.subtitle_entry = Entry(subtitle_frame,
+                                    textvariable=self.subtitle_langs_var,
+                                    font=('맑은 고딕', 9),
+                                    width=20,
+                                    state='disabled',
+                                    relief=SOLID,
+                                    borderwidth=1)
+        self.subtitle_entry.pack(side=LEFT, ipady=3)
+
+        Label(subtitle_frame, text="(예: ko,en,ja)",
+              font=('맑은 고딕', 8),
+              fg='#6B7280',
+              bg=self.colors['bg']).pack(side=LEFT, padx=(10, 0))
+
+    def create_progress_section(self, parent):
+        """진행 상태 섹션"""
+        progress_frame = LabelFrame(parent, text="  📊 다운로드 진행 상태  ",
+                                   font=('맑은 고딕', 11, 'bold'),
+                                   bg=self.colors['bg'],
+                                   fg=self.colors['text'],
+                                   padx=15, pady=15)
+        progress_frame.pack(fill=X, pady=(0, 15))
+
+        # 진행률 바
+        self.progress_var = DoubleVar()
+        self.progress_bar = ttk.Progressbar(progress_frame,
+                                           variable=self.progress_var,
+                                           maximum=100,
+                                           length=800,
+                                           mode='determinate')
+        self.progress_bar.pack(fill=X, pady=(0, 10))
+
+        # 상태 텍스트
+        self.status_label = Label(progress_frame,
+                                 text="⏸️  대기 중...",
+                                 font=('맑은 고딕', 10),
+                                 bg=self.colors['bg'],
+                                 fg='#6B7280',
+                                 anchor=W)
+        self.status_label.pack(fill=X)
+
+    def create_log_section(self, parent):
+        """로그 섹션"""
+        log_frame = LabelFrame(parent, text="  📋 로그  ",
+                              font=('맑은 고딕', 11, 'bold'),
+                              bg=self.colors['bg'],
+                              fg=self.colors['text'],
+                              padx=15, pady=15)
+        log_frame.pack(fill=BOTH, expand=True, pady=(0, 15))
+
+        self.log_text = scrolledtext.ScrolledText(log_frame,
+                                                 height=6,
+                                                 font=('맑은 고딕', 9),
+                                                 relief=SOLID,
+                                                 borderwidth=1,
+                                                 state='disabled')
+        self.log_text.pack(fill=BOTH, expand=True)
+
+    def create_action_buttons(self, parent):
+        """액션 버튼 섹션"""
+        button_frame = Frame(parent, bg=self.colors['bg'])
+        button_frame.pack(fill=X)
+
+        # 다운로드 버튼 (크고 눈에 띄게)
+        self.download_button = Button(button_frame,
+                                     text="⬇️  다운로드 시작",
+                                     command=self.start_download,
+                                     font=('맑은 고딕', 12, 'bold'),
+                                     bg=self.colors['primary'],
+                                     fg='white',
+                                     relief=FLAT,
+                                     cursor='hand2',
+                                     padx=30,
+                                     pady=12)
+        self.download_button.pack(side=LEFT, expand=True, fill=X, padx=(0, 10))
+
+        # 로그 지우기 버튼
+        Button(button_frame,
+              text="🗑️  로그 지우기",
+              command=self.clear_log,
+              font=('맑은 고딕', 10),
+              bg='#F3F4F6',
+              relief=FLAT,
+              cursor='hand2',
+              padx=20,
+              pady=12).pack(side=LEFT)
+
+    def check_clipboard(self):
+        """클립보드에서 YouTube URL 확인"""
+        try:
+            clipboard = self.root.clipboard_get()
+            if clipboard and 'youtube.com' in clipboard or 'youtu.be' in clipboard:
+                current_url = self.url_var.get()
+                if not current_url or current_url != clipboard:
+                    # 클립보드에 새로운 YouTube URL이 있음을 표시
+                    pass
+        except:
+            pass
+
+        # 1초마다 체크
+        self.root.after(1000, self.check_clipboard)
+
+    def paste_from_clipboard(self):
+        """클립보드에서 붙여넣기"""
+        try:
+            clipboard = self.root.clipboard_get()
+            if clipboard:
+                self.url_var.set(clipboard)
+                self.log("📋 클립보드에서 URL을 붙여넣었습니다.")
+
+                # YouTube URL이면 자동으로 정보 가져오기 제안
+                if 'youtube.com' in clipboard or 'youtu.be' in clipboard:
+                    self.log("✅ YouTube URL이 감지되었습니다!")
+        except:
+            messagebox.showwarning("경고", "클립보드가 비어있습니다.")
+
+    def browse_folder(self):
+        """저장 폴더 선택"""
+        folder = filedialog.askdirectory(initialdir=self.download_path.get())
+        if folder:
+            self.download_path.set(folder)
+            self.log(f"💾 저장 위치 변경: {folder}")
+
+    def open_download_folder(self):
+        """다운로드 폴더 열기"""
+        path = Path(self.download_path.get())
+        if path.exists():
+            if sys.platform == 'win32':
+                os.startfile(path)
+            elif sys.platform == 'darwin':
+                os.system(f'open "{path}"')
+            else:
+                os.system(f'xdg-open "{path}"')
+            self.log(f"📂 폴더 열기: {path}")
+        else:
+            messagebox.showwarning("경고", "폴더가 존재하지 않습니다.")
 
     def toggle_subtitle_options(self):
         """자막 옵션 토글"""
@@ -156,13 +418,6 @@ class YouTubeDownloaderGUI:
             self.subtitle_entry.config(state='normal')
         else:
             self.subtitle_entry.config(state='disabled')
-
-    def browse_folder(self):
-        """저장 폴더 선택"""
-        folder = filedialog.askdirectory(initialdir=self.download_path.get())
-        if folder:
-            self.download_path.set(folder)
-            self.log(f"저장 위치 변경: {folder}")
 
     def log(self, message):
         """로그 메시지 추가"""
@@ -176,6 +431,7 @@ class YouTubeDownloaderGUI:
         self.log_text.config(state='normal')
         self.log_text.delete(1.0, END)
         self.log_text.config(state='disabled')
+        self.log("🗑️  로그가 지워졌습니다.")
 
     def update_info_text(self, text):
         """비디오 정보 업데이트"""
@@ -183,6 +439,35 @@ class YouTubeDownloaderGUI:
         self.info_text.delete(1.0, END)
         self.info_text.insert(1.0, text)
         self.info_text.config(state='disabled')
+
+    def load_thumbnail(self, url):
+        """썸네일 다운로드 및 표시"""
+        if not PIL_AVAILABLE:
+            return
+
+        try:
+            # 썸네일 다운로드
+            with urllib.request.urlopen(url) as u:
+                raw_data = u.read()
+
+            # 이미지 처리
+            image = Image.open(io.BytesIO(raw_data))
+
+            # 리사이즈 (비율 유지)
+            image.thumbnail((300, 200), Image.Resampling.LANCZOS)
+
+            # PhotoImage로 변환
+            self.thumbnail_image = ImageTk.PhotoImage(image)
+
+            # 레이블에 표시
+            self.root.after(0, lambda: self.thumbnail_label.config(
+                image=self.thumbnail_image,
+                text="",
+                bg=self.colors['bg']
+            ))
+
+        except Exception as e:
+            self.log(f"⚠️  썸네일 로드 실패: {str(e)}")
 
     def fetch_video_info(self):
         """비디오 정보 가져오기"""
@@ -192,8 +477,8 @@ class YouTubeDownloaderGUI:
             messagebox.showwarning("경고", "YouTube URL을 입력하세요.")
             return
 
-        self.log("비디오 정보를 가져오는 중...")
-        self.status_label.config(text="비디오 정보를 가져오는 중...")
+        self.log("🔍 비디오 정보를 가져오는 중...")
+        self.status_label.config(text="🔍 비디오 정보를 가져오는 중...")
 
         # 별도 스레드에서 실행
         thread = threading.Thread(target=self._fetch_video_info_thread, args=(url,))
@@ -217,11 +502,17 @@ class YouTubeDownloaderGUI:
             duration = self.video_info.get('duration', 0)
             duration_str = f"{duration // 60}분 {duration % 60}초"
             view_count = self.video_info.get('view_count', 0)
+            upload_date = self.video_info.get('upload_date', 'Unknown')
 
-            info_text = f"제목: {title}\n"
-            info_text += f"채널: {uploader}\n"
-            info_text += f"길이: {duration_str}\n"
-            info_text += f"조회수: {view_count:,}\n"
+            # 날짜 포맷
+            if upload_date != 'Unknown' and len(upload_date) == 8:
+                upload_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:]}"
+
+            info_text = f"📺 제목: {title}\n\n"
+            info_text += f"👤 채널: {uploader}\n\n"
+            info_text += f"⏱️  길이: {duration_str}\n\n"
+            info_text += f"👁️  조회수: {view_count:,}회\n\n"
+            info_text += f"📅 업로드: {upload_date}\n\n"
 
             # 자막 정보
             subtitles = self.video_info.get('subtitles', {})
@@ -229,9 +520,16 @@ class YouTubeDownloaderGUI:
             all_subs = set(list(subtitles.keys()) + list(auto_captions.keys()))
 
             if all_subs:
-                info_text += f"사용 가능한 자막: {', '.join(sorted(all_subs))}"
+                info_text += f"📝 자막: {', '.join(sorted(all_subs))}"
+            else:
+                info_text += "📝 자막: 없음"
 
             self.root.after(0, self.update_info_text, info_text)
+
+            # 썸네일 로드
+            thumbnail_url = self.video_info.get('thumbnail')
+            if thumbnail_url:
+                threading.Thread(target=self.load_thumbnail, args=(thumbnail_url,), daemon=True).start()
 
             # 포맷 정보 가져오기
             self.formats = self._get_available_formats()
@@ -244,14 +542,14 @@ class YouTubeDownloaderGUI:
             self.root.after(0, lambda: self.resolution_combo.config(values=format_options))
             self.root.after(0, lambda: self.resolution_var.set("최고 화질"))
 
-            self.root.after(0, self.log, f"비디오 정보를 가져왔습니다: {title}")
-            self.root.after(0, self.log, f"사용 가능한 해상도: {len(self.formats)}개")
-            self.root.after(0, lambda: self.status_label.config(text="준비 완료"))
+            self.root.after(0, self.log, f"✅ 비디오 정보를 가져왔습니다: {title}")
+            self.root.after(0, self.log, f"🎥 사용 가능한 해상도: {len(self.formats)}개")
+            self.root.after(0, lambda: self.status_label.config(text="✅ 준비 완료 - 다운로드를 시작할 수 있습니다"))
 
         except Exception as e:
-            error_msg = f"오류 발생: {str(e)}"
+            error_msg = f"❌ 오류 발생: {str(e)}"
             self.root.after(0, self.log, error_msg)
-            self.root.after(0, lambda: self.status_label.config(text="오류 발생"))
+            self.root.after(0, lambda: self.status_label.config(text="❌ 오류 발생"))
             self.root.after(0, messagebox.showerror, "오류", error_msg)
 
     def _get_available_formats(self):
@@ -312,7 +610,7 @@ class YouTubeDownloaderGUI:
                 subtitle_langs = [lang.strip() for lang in langs_str.split(',')]
 
         self.is_downloading = True
-        self.download_button.config(state='disabled')
+        self.download_button.config(state='disabled', bg='#9CA3AF')
         self.progress_var.set(0)
 
         # 별도 스레드에서 다운로드
@@ -341,25 +639,28 @@ class YouTubeDownloaderGUI:
                     ydl_opts['subtitleslangs'] = subtitle_langs
                 ydl_opts['subtitlesformat'] = 'srt/best'
 
-            self.root.after(0, self.log, "다운로드 시작...")
+            self.root.after(0, self.log, "⬇️  다운로드 시작...")
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
 
-            self.root.after(0, self.log, "다운로드 완료!")
-            self.root.after(0, lambda: self.status_label.config(text="다운로드 완료!"))
+            self.root.after(0, self.log, "🎉 다운로드 완료!")
+            self.root.after(0, lambda: self.status_label.config(text="🎉 다운로드 완료!"))
             self.root.after(0, messagebox.showinfo, "완료",
-                          f"다운로드가 완료되었습니다!\n저장 위치: {self.download_path.get()}")
+                          f"다운로드가 완료되었습니다!\n\n저장 위치:\n{self.download_path.get()}")
 
         except Exception as e:
-            error_msg = f"다운로드 오류: {str(e)}"
+            error_msg = f"❌ 다운로드 오류: {str(e)}"
             self.root.after(0, self.log, error_msg)
-            self.root.after(0, lambda: self.status_label.config(text="다운로드 실패"))
+            self.root.after(0, lambda: self.status_label.config(text="❌ 다운로드 실패"))
             self.root.after(0, messagebox.showerror, "오류", error_msg)
 
         finally:
             self.is_downloading = False
-            self.root.after(0, lambda: self.download_button.config(state='normal'))
+            self.root.after(0, lambda: self.download_button.config(
+                state='normal',
+                bg=self.colors['primary']
+            ))
             self.root.after(0, lambda: self.progress_var.set(0))
 
     def progress_hook(self, d):
@@ -373,28 +674,37 @@ class YouTubeDownloaderGUI:
 
             speed = d.get('_speed_str', 'N/A')
             eta = d.get('_eta_str', 'N/A')
-            status_text = f"다운로드 중... 속도: {speed} | 남은 시간: {eta}"
+            percent_str = d.get('_percent_str', 'N/A')
+            status_text = f"⬇️  다운로드 중... {percent_str} | 속도: {speed} | 남은 시간: {eta}"
             self.root.after(0, lambda: self.status_label.config(text=status_text))
 
         elif d['status'] == 'finished':
             self.root.after(0, lambda: self.progress_var.set(100))
-            self.root.after(0, lambda: self.status_label.config(text="변환 중..."))
-            self.root.after(0, self.log, "다운로드 완료, 파일 변환 중...")
+            self.root.after(0, lambda: self.status_label.config(text="🔄 파일 변환 중..."))
+            self.root.after(0, self.log, "✅ 다운로드 완료, 파일 변환 중...")
 
 
 def main():
     """메인 함수"""
     root = Tk()
-    app = YouTubeDownloaderGUI(root)
 
     # 윈도우 아이콘 설정 (선택 사항)
     try:
-        # ico 파일이 있으면 설정
         icon_path = Path(__file__).parent / "icon.ico"
         if icon_path.exists():
             root.iconbitmap(icon_path)
     except:
         pass
+
+    app = YouTubeDownloaderGUI(root)
+
+    # 윈도우 중앙 정렬
+    root.update_idletasks()
+    width = root.winfo_width()
+    height = root.winfo_height()
+    x = (root.winfo_screenwidth() // 2) - (width // 2)
+    y = (root.winfo_screenheight() // 2) - (height // 2)
+    root.geometry(f'{width}x{height}+{x}+{y}')
 
     root.mainloop()
 
