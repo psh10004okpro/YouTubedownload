@@ -31,6 +31,18 @@ cd YouTubedownload
 
 ### 3. 의존성 설치
 
+#### 방법 A: 자동 설치 (Windows 추천) ⭐
+
+파일 탐색기에서 `install.bat`을 더블 클릭하거나:
+
+```bash
+install.bat
+```
+
+이 스크립트가 자동으로 필요한 패키지를 모두 설치합니다.
+
+#### 방법 B: 수동 설치
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -43,14 +55,23 @@ pip install yt-dlp colorama
 
 ## 사용 방법
 
+### 빠른 시작 (Windows) 🚀
+
+1. `install.bat` 실행 (처음 한 번만)
+2. `run_gui.bat` 실행
+3. YouTube URL 입력하고 다운로드!
+
 ### 방법 1: GUI 버전 (Windows 추천) ⭐
 
-#### Python이 설치된 경우:
-
 **Windows:**
+
+파일 탐색기에서 `run_gui.bat`을 더블 클릭하거나:
+
 ```bash
 run_gui.bat
 ```
+
+**참고:** 처음 실행 시 필요한 패키지가 자동으로 설치됩니다.
 
 또는:
 ```bash
@@ -182,6 +203,19 @@ ko, en, ja
 
 ## 문제 해결
 
+### "No module named 'yt_dlp'" 오류
+
+이 오류가 발생하면:
+
+1. `install.bat`을 실행하세요
+2. 또는 수동으로 설치: `python -m pip install yt-dlp colorama`
+
+**참고:** `run_gui.bat`과 `run_cli.bat`은 이제 자동으로 패키지를 설치합니다.
+
+### 한글이 깨져서 나오는 경우
+
+이 문제는 수정되었습니다. 최신 버전의 배치 파일을 사용하세요.
+
 ### ffmpeg 관련 오류
 
 일부 포맷을 병합하려면 ffmpeg가 필요합니다:
@@ -212,6 +246,7 @@ YouTubedownload/
 ├── youtube_downloader_gui.py    # GUI 버전 (Windows용)
 ├── youtube_downloader.py         # CLI 버전 (명령줄)
 ├── requirements.txt              # 필요한 패키지 목록
+├── install.bat                   # ⭐ 설치 스크립트 (처음 한 번 실행)
 ├── run_gui.bat                   # GUI 실행 스크립트 (Windows)
 ├── run_cli.bat                   # CLI 실행 스크립트 (Windows)
 ├── build_exe.bat                 # 실행 파일 빌드 스크립트
